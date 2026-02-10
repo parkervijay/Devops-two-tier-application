@@ -297,14 +297,212 @@ pipeline {
     * Confirm the containers are running on the EC2 instance with `docker ps`.
 
 ---
+8. Challenges Faced & Solutions
 
-### **8. Conclusion**
+During the implementation of the automated CI/CD pipeline for the 2-Tier Flask and MySQL application, multiple real-time infrastructure, containerization, and orchestration challenges were encountered. This section documents the major issues faced, their root causes, and the solutions applied to successfully complete the deployment.
+
+Challenge 1: Jenkins Unable to Execute Docker Commands
+
+Issue Observed
+
+During pipeline execution, the build failed at the Docker stage with the error:
+
+docker: not found
+
+
+Root Cause
+
+Jenkins was deployed inside a Docker container. Due to container isolation, Docker CLI was not available inside the Jenkins runtime environment, preventing it from executing container build commands.
+
+Solution Implemented
+
+Docker socket was mounted from the host to the Jenkins container:
+
+-v /var/run/docker.sock:/var/run/docker.sock
+
+
+Docker CLI was then installed inside the Jenkins container:
+
+docker exec -u 0 -it jenkins bash
+apt update
+apt install docker.io -y
+
+
+This enabled Jenkins to interact with the host Docker daemon.
+
+Challenge 2: Docker Permission Denied Error
+
+Issue Observed
+
+After installing Docker CLI, the pipeline failed with:
+
+permission denied while trying to connect to docker.sock
+
+
+Root Cause
+
+The Jenkins user inside the container lacked permission to access the Docker daemon socket, which is restricted to root/docker group users.
+
+Solution Implemented
+
+The Jenkins container was executed with root privileges:
+
+-u root
+
+
+This granted Jenkins permission to run Docker commands successfully.
+
+Challenge 3: Docker Compose Command Not Found
+
+Issue Observed
+
+Deployment stage failed with:
+
+docker: 'compose' is not a docker command
+
+
+Root Cause
+
+Docker Compose plugin was not installed inside the Jenkins container.
+
+Solution Implemented
+
+Installed Docker Compose plugin:
+
+apt install docker-compose-plugin -y
+
+
+This enabled multi-container orchestration through:
+
+docker compose up -d --build
+
+Challenge 4: EC2 Instance Freeze During Deployment
+
+Issue Observed
+
+SSH became unresponsive and Jenkins UI stopped loading while MySQL container was initializing.
+
+Root Cause
+
+The AWS t2.micro instance (1 GB RAM) was insufficient to handle concurrent workloads:
+
+Jenkins + Docker + MySQL + Flask + Build Processes
+
+
+This caused memory exhaustion and system freeze.
+
+Solution Implemented
+
+Rebooted the EC2 instance from AWS Console.
+
+Cleaned running containers and images.
+
+Identified resource limitation.
+
+Recommended upgrading instance type to t2.small for stability.
+
+Challenge 5: Disk Space Exhaustion in Jenkins Home
+
+Issue Observed
+
+Jenkins displayed disk space warnings and stopped scheduling builds.
+
+Root Cause
+
+The mounted Jenkins volume accumulated:
+
+Build logs
+
+Workspaces
+
+Git clones
+
+Docker layers
+
+This filled the root EBS volume.
+
+Solution Implemented
+
+Disk cleanup was performed:
+
+docker system prune -a -f
+rm -rf /var/lib/docker/volumes/jenkins_home/_data/workspace/*
+rm -rf /var/lib/docker/volumes/jenkins_home/_data/jobs/*/builds/*
+
+
+This restored Jenkins executor functionality.
+
+Challenge 6: MySQL Container Restart Loop
+
+Issue Observed
+
+MySQL container repeatedly restarted:
+
+Restarting (1)
+
+
+Root Cause
+
+Database logs revealed InnoDB corruption:
+
+Cannot create redo log files
+Database not shut down cleanly
+
+
+This occurred because the EC2 instance crashed during database initialization.
+
+Solution Implemented
+
+Reset the MySQL data volume:
+
+docker compose down -v
+docker compose up -d --build
+
+
+This reinitialized the database successfully.
+
+Challenge 7: Jenkins Executor Unavailable
+
+Issue Observed
+
+Builds remained queued with:
+
+Waiting for next available executor
+
+
+Root Cause
+
+Interrupted builds occupied executor slots after the system freeze.
+
+Solution Implemented
+
+Restarted Jenkins container.
+
+Terminated stuck builds.
+
+Verified executor configuration under node settings.
+
+Challenge 8: Docker Compose File Not Found (Manual Deployment)
+
+Issue Observed
+
+Manual deployment returned:
+
+Can't find docker-compose.yml
+
+
+Root Cause
+
+Compose command was executed outside the project directory.
+
+Solution Implemented
+
+Repository was cloned locally and navigated correctly:
+
+git clone https://github.com/parkervijay/Devops-two-tier-application.git
+cd Devops-two-tier-application
+docker compose up -d --build
+
+### **9. Conclusion**
 The CI/CD pipeline is now fully operational. Any `git push` to the `main` branch of the configured GitHub repository will automatically trigger the Jenkins pipeline, which will build the new Docker image and deploy the updated application, ensuring a seamless and automated workflow from development to production.
 
-
-### **9. Infrastructure Diagram**
-<img src="diagrams/Infrastructure.png">
-
-
-### **10. Work flow Diagram**
-<img src="diagrams/project_workflow.png">
