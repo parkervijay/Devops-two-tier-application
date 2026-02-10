@@ -112,40 +112,149 @@ This report explains the complete procedure for deploying a 2-tier web applicati
 
 ---
 
-### **5. Step 3: Jenkins Installation and Setup**
+### **5. Step 3: Jenkins Installation and Setup (Docker-Based Deployment)**
 
-1.  **Install Java (OpenJDK 17):**
-    ```bash
-    sudo apt install openjdk-17-jdk -y
-    ```
+Instead of installing Jenkins directly on the EC2 host, Jenkins was deployed as a Docker container to ensure portability, isolation, and easier dependency management.
 
-2.  **Add Jenkins Repository and Install:**
-    ```bash
-    curl -fsSL [https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key](https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key) | sudo tee /usr/share/keyrings/jenkins-keyring.asc > /dev/null
-    echo deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] [https://pkg.jenkins.io/debian-stable](https://pkg.jenkins.io/debian-stable) binary/ | sudo tee /etc/apt/sources.list.d/jenkins.list > /dev/null
-    sudo apt update
-    sudo apt install jenkins -y
-    ```
+---
 
-3.  **Start and Enable Jenkins Service:**
-    ```bash
-    sudo systemctl start jenkins
-    sudo systemctl enable jenkins
-    ```
+#### **1. Pull Jenkins Docker Image**
 
-4.  **Initial Jenkins Setup:**
-    * Retrieve the initial admin password:
-        ```bash
-        sudo cat /var/lib/jenkins/secrets/initialAdminPassword
-        ```
-    * Access the Jenkins dashboard at `http://<ec2-public-ip>:8080`.
-    * Paste the password, install suggested plugins, and create an admin user.
+```bash
+docker pull jenkins/jenkins:lts
+```
 
-5.  **Grant Jenkins Docker Permissions:**
-    ```bash
-    sudo usermod -aG docker jenkins
-    sudo systemctl restart jenkins
-    ```
+This downloads the Long-Term Support (LTS) Jenkins image from Docker Hub.
+
+---
+
+#### **2. Create Jenkins Persistent Volume**
+
+```bash
+docker volume create jenkins_home
+```
+
+This volume stores:
+
+• Jenkins jobs  
+• Plugins  
+• Pipeline configurations  
+• Build history  
+
+Ensuring data persists even if the container restarts.
+
+---
+
+#### **3. Run Jenkins Container**
+
+```bash
+docker run -d \
+  --name jenkins \
+  -p 8080:8080 \
+  -p 50000:50000 \
+  -v jenkins_home:/var/jenkins_home \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -u root \
+  jenkins/jenkins:lts
+```
+
+**Explanation of Key Parameters**
+
+```
+-p 8080:8080     → Jenkins Web UI
+-p 50000:50000   → Jenkins Agent Communication
+-v jenkins_home  → Persistent Jenkins Data
+-v docker.sock   → Host Docker Access
+-u root          → Docker execution permissions
+```
+
+---
+
+#### **4. Access Jenkins Dashboard**
+
+Open browser and navigate to:
+
+```
+http://<ec2-public-ip>:8080
+```
+
+---
+
+#### **5. Retrieve Initial Admin Password**
+
+```bash
+docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
+```
+
+Copy the password and paste it into the Jenkins setup screen.
+
+---
+
+#### **6. Install Suggested Plugins**
+
+During initial setup:
+
+• Selected **Install Suggested Plugins**  
+• Installed pipeline, Git, Docker-related plugins  
+
+This enabled CI/CD pipeline functionality.
+
+---
+
+#### **7. Create Admin User**
+
+Configured:
+
+• Username  
+• Password  
+• Email  
+• Full name  
+
+This completed Jenkins initialization.
+
+---
+
+#### **8. Install Docker CLI Inside Jenkins Container**
+
+To allow Jenkins pipelines to execute Docker commands:
+
+```bash
+docker exec -u 0 -it jenkins bash
+apt update
+apt install docker.io -y
+exit
+```
+
+---
+
+#### **9. Install Docker Compose Plugin**
+
+Required for multi-container deployment:
+
+```bash
+docker exec -u 0 -it jenkins bash
+apt install docker-compose-plugin -y
+exit
+```
+
+---
+
+#### **10. Verify Docker Access Inside Jenkins**
+
+```bash
+docker exec -it jenkins docker ps
+docker exec -it jenkins docker compose version
+```
+
+Successful output confirmed Jenkins could:
+
+• Build images  
+• Run containers  
+• Execute Docker Compose deployments  
+
+---
+
+This completed the Jenkins setup required to run CI/CD pipelines for the 2-tier containerized application.
 
 
 ---
