@@ -327,7 +327,7 @@ services:
     environment:
       - MYSQL_HOST=mysql
       - MYSQL_USER=root
-      - MYSQL_PASSWORD=root
+      - MYSQL_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - MYSQL_DB=devops
     networks:
       - two-tier
